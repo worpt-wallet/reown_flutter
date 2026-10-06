@@ -1,4 +1,7 @@
+import 'dart:io' as io;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
 import 'package:reown_walletkit/reown_walletkit.dart';
 import 'package:reown_walletkit_wallet/dependencies/bottom_sheet/i_bottom_sheet_service.dart';
@@ -209,6 +212,11 @@ class MethodsUtils {
     await Future.delayed(Duration(milliseconds: delay));
     DeepLinkHandler.waiting.value = false;
     try {
+      if (io.Platform.isAndroid) {
+        final channel = MethodChannel('com.walletconnect.flutterwallet/methods');
+        await channel.invokeMethod<void>('moveToBackground');
+        return;
+      }
       await walletKit.redirectToDapp(topic: topic, redirect: redirect);
     } on ReownSignError catch (e) {
       onFail?.call(e);

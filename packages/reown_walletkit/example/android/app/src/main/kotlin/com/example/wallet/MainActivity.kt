@@ -42,6 +42,9 @@ class MainActivity: FlutterActivity() {
                 if (initialLink != null) {
                     result.success(initialLink)
                 }
+            } else if (call.method == "moveToBackground") {
+                moveTaskToBack(true)
+                result.success(true)
             }
         }
     }

@@ -1,0 +1,134 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Sample Wallet APK Release Workflow
+#
+# Required repo setup:
+#   1. Two GitHub Environments: "staging" and "uat"
+#   2. Each environment has these secrets:
+#      - E2E_REOWN_PROJECT_ID
+#      - E2E_WALLET_PRIVATE_KEY
+#
+# Trigger:
+#   - Push tag:  sample-wallet-v1, sample-wallet-v2, …
+#   - Manual:    workflow_dispatch (enter tag name)
+#
+# Output: a GitHub Release with two APKs:
+#   - sample-wallet-staging.apk
+#   - sample-wallet-uat.apk
+#
+# The consuming wallet-flutter workflow downloads the latest release with:
+#   gh release download --repo worpt-wallet/reown_flutter --pattern "sample-wallet-<flavor>.apk"
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Release Sample Wallet APK
+
+on:
+  push:
+    tags:
+      - 'sample-wallet-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. sample-wallet-v1)'
+        required: true
+        type: string
+
+concurrency:
+  group: sample-wallet-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        flavor: [staging, uat]
+    environment: ${{ matrix.flavor }}
+    env:
+      GRADLE_OPTS: >-
+        -Dorg.gradle.daemon=false
+        -Dorg.gradle.caching=true
+        -Dkotlin.compiler.execution.strategy=in-process
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: packages/reown_walletkit/example/pubspec.yaml
+          channel: stable
+          cache: true
+
+      - name: Cache pub
+        uses: actions/cache@v5
+        with:
+          path: ~/.pub-cache
+          key: >-
+            pub-${{ runner.os }}-reown-
+            ${{ hashFiles('packages/reown_walletkit/example/pubspec.lock') }}
+
+      - name: Flutter setup
+        working-directory: packages/reown_walletkit/example
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build APK
+        working-directory: packages/reown_walletkit/example
+        env:
+          E2E_REOWN_PROJECT_ID: ${{ secrets.E2E_REOWN_PROJECT_ID }}
+          E2E_WALLET_PRIVATE_KEY: ${{ secrets.E2E_WALLET_PRIVATE_KEY }}
+        run: |
+          flutter build apk \
+            --flavor internal \
+            --debug \
+            --target-platform android-x64 \
+            --no-pub \
+            --dart-define="PROJECT_ID=$E2E_REOWN_PROJECT_ID" \
+            --dart-define="ENABLE_TEST_MODE=true" \
+            --dart-define="TEST_WALLET_PRIVATE_KEY=$E2E_WALLET_PRIVATE_KEY"
+
+      - name: Collect APK
+        run: |
+          mkdir -p /tmp/apks
+          cp packages/reown_walletkit/example/build/app/outputs/flutter-apk/*.apk \
+            "/tmp/apks/sample-wallet-${{ matrix.flavor }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sample-wallet-${{ matrix.flavor }}
+          path: /tmp/apks/sample-wallet-${{ matrix.flavor }}.apk
+          retention-days: 3
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/apks
+          merge-multiple: true
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.tag.outputs.value }}" \
+            --title "Sample Wallet APK — ${{ steps.tag.outputs.value }}" \
+            --notes "Auto-built sample wallet APKs for e2e tests." \
+            /tmp/apks/*.apk

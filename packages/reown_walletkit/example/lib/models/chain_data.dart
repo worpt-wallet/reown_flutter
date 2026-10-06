@@ -88,6 +88,17 @@ class ChainsDataList {
     ),
     ChainMetadata(
       type: ChainType.eip155,
+      chainId: 'eip155:97',
+      name: 'BSC Testnet',
+      currency: 'tBNB',
+      logo:
+          'https://pbs.twimg.com/profile_images/1876286110071975936/HvkhyFZg_400x400.jpg',
+      color: Colors.orange,
+      isTestnet: true,
+      rpc: ['https://data-seed-prebsc-1-s1.bnbchain.org:8545'],
+    ),
+    ChainMetadata(
+      type: ChainType.eip155,
       chainId: 'eip155:11155111',
       name: 'Eth Sepolia',
       currency: 'ETH',
