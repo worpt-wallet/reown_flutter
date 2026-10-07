@@ -1,36 +1,30 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Sample Wallet APK Release Workflow
 #
+# Always maintains a single "latest" release with the most recent APKs.
+# Trigger manually via workflow_dispatch or on push to develop branch.
+#
 # Required repo setup:
 #   1. Two GitHub Environments: "staging" and "uat"
 #   2. Each environment has these secrets:
 #      - E2E_REOWN_PROJECT_ID
 #      - E2E_WALLET_PRIVATE_KEY
 #
-# Trigger:
-#   - Push tag:  sample-wallet-v1, sample-wallet-v2, …
-#   - Manual:    workflow_dispatch (enter tag name)
-#
-# Output: a GitHub Release with two APKs:
+# Output: a GitHub Release tagged "latest" with two APKs:
 #   - sample-wallet-staging.apk
 #   - sample-wallet-uat.apk
 #
-# The consuming wallet-flutter workflow downloads the latest release with:
-#   gh release download --repo worpt-wallet/reown_flutter --pattern "sample-wallet-<flavor>.apk"
+# The consuming wallet-flutter workflow downloads with:
+#   gh release download latest --repo worpt-wallet/reown_flutter --pattern "sample-wallet-<flavor>.apk"
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Release Sample Wallet APK
 
 on:
   push:
-    tags:
-      - 'sample-wallet-v*'
+    branches:
+      - develop
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g. sample-wallet-v1)'
-        required: true
-        type: string
 
 concurrency:
   group: sample-wallet-release
@@ -115,20 +109,24 @@ jobs:
           path: /tmp/apks
           merge-multiple: true
 
-      - name: Determine tag
-        id: tag
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create GitHub Release
+      - name: Update latest release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ steps.tag.outputs.value }}" \
-            --title "Sample Wallet APK — ${{ steps.tag.outputs.value }}" \
-            --notes "Auto-built sample wallet APKs for e2e tests." \
+          TAG="latest"
+          
+          # Delete existing release if it exists
+          if gh release view "$TAG" &>/dev/null; then
+            gh release delete "$TAG" --yes
+          fi
+          
+          # Delete the tag if it exists
+          if git rev-parse "$TAG" &>/dev/null; then
+            git push origin ":refs/tags/$TAG" || true
+          fi
+          
+          # Create new release
+          gh release create "$TAG" \
+            --title "Sample Wallet APK — Latest" \
+            --notes "Auto-built sample wallet APKs for e2e tests. Always reflects the latest build from develop branch." \
             /tmp/apks/*.apk
