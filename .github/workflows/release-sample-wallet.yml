@@ -53,7 +53,6 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version-file: packages/reown_walletkit/example/pubspec.yaml
           channel: stable
           cache: true
 
