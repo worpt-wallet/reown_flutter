@@ -82,6 +82,7 @@ jobs:
             --debug \
             --target-platform android-x64 \
             --no-pub \
+            --android-skip-build-dependency-validation \
             --dart-define="PROJECT_ID=$E2E_REOWN_PROJECT_ID" \
             --dart-define="ENABLE_TEST_MODE=true" \
             --dart-define="TEST_WALLET_PRIVATE_KEY=$E2E_WALLET_PRIVATE_KEY"
