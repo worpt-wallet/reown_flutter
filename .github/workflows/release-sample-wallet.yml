@@ -74,7 +74,6 @@ jobs:
           flutter build apk \
             --flavor internal \
             --debug \
-            --target-platform android-x64 \
             --no-pub \
             --android-skip-build-dependency-validation \
             --dart-define="PROJECT_ID=$E2E_REOWN_PROJECT_ID" \
